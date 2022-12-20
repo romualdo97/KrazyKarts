@@ -1,0 +1,42 @@
+[
+	{
+		"file": "C:\\Users\\romualdo.villalobos\\Documents\\Unreal Projects\\KrazyKarts\\KrazyKarts\\Source\\KrazyKarts\\GoKart.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.34.31933\\bin\\HostX64\\x64\\cl.exe",
+			"@C:\\Users\\romualdo.villalobos\\Documents\\Unreal Projects\\KrazyKarts\\KrazyKarts\\.vscode\\compileCommands_KrazyKarts\\KrazyKarts.258.rsp"
+		],
+		"directory": "C:\\Program Files\\Epic Games\\UE_5.1\\Engine\\Source"
+	},
+	{
+		"file": "C:\\Users\\romualdo.villalobos\\Documents\\Unreal Projects\\KrazyKarts\\KrazyKarts\\Source\\KrazyKarts\\GoKart.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.34.31933\\bin\\HostX64\\x64\\cl.exe",
+			"@C:\\Users\\romualdo.villalobos\\Documents\\Unreal Projects\\KrazyKarts\\KrazyKarts\\.vscode\\compileCommands_KrazyKarts\\KrazyKarts.258.rsp"
+		],
+		"directory": "C:\\Program Files\\Epic Games\\UE_5.1\\Engine\\Source"
+	},
+	{
+		"file": "C:\\Users\\romualdo.villalobos\\Documents\\Unreal Projects\\KrazyKarts\\KrazyKarts\\Source\\KrazyKarts\\KrazyKarts.Build.cs",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.34.31933\\bin\\HostX64\\x64\\cl.exe",
+			"@C:\\Users\\romualdo.villalobos\\Documents\\Unreal Projects\\KrazyKarts\\KrazyKarts\\.vscode\\compileCommands_KrazyKarts\\KrazyKarts.258.rsp"
+		],
+		"directory": "C:\\Program Files\\Epic Games\\UE_5.1\\Engine\\Source"
+	},
+	{
+		"file": "C:\\Users\\romualdo.villalobos\\Documents\\Unreal Projects\\KrazyKarts\\KrazyKarts\\Source\\KrazyKarts\\KrazyKarts.cpp",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.34.31933\\bin\\HostX64\\x64\\cl.exe",
+			"@C:\\Users\\romualdo.villalobos\\Documents\\Unreal Projects\\KrazyKarts\\KrazyKarts\\.vscode\\compileCommands_KrazyKarts\\KrazyKarts.258.rsp"
+		],
+		"directory": "C:\\Program Files\\Epic Games\\UE_5.1\\Engine\\Source"
+	},
+	{
+		"file": "C:\\Users\\romualdo.villalobos\\Documents\\Unreal Projects\\KrazyKarts\\KrazyKarts\\Source\\KrazyKarts\\KrazyKarts.h",
+		"arguments": [
+			"C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\VC\\Tools\\MSVC\\14.34.31933\\bin\\HostX64\\x64\\cl.exe",
+			"@C:\\Users\\romualdo.villalobos\\Documents\\Unreal Projects\\KrazyKarts\\KrazyKarts\\.vscode\\compileCommands_KrazyKarts\\KrazyKarts.258.rsp"
+		],
+		"directory": "C:\\Program Files\\Epic Games\\UE_5.1\\Engine\\Source"
+	}
+]
