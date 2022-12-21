@@ -27,8 +27,17 @@ void AGoKartPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	const FVector DeltaLocation = DeltaTime * CurrentSpeed * GetActorForwardVector();
-	AddActorWorldOffset(DeltaLocation);
+	// Accumulate the moving force  
+	AddMovingForce(DeltaTime);
+	
+	// Accumulate the tarmac friction force
+	AddKineticFrictionForce();
+	
+	// Calculate acceleration from force then integrate twice to get current position
+	Acceleration = AccumulatedForce / Mass;
+	Velocity += DeltaTime * Acceleration;	
+	const FVector DeltaLocation = DeltaTime * Velocity * 100; // convert meters to centimeters
+	UpdateLocation(DeltaLocation);
 }
 
 // Called to bind functionality to input
@@ -48,17 +57,60 @@ void AGoKartPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
  
 	Input->BindAction(BreakInputAction, ETriggerEvent::Triggered, this, &AGoKartPawn::HandleBreak);
 	Input->BindAction(BreakInputAction, ETriggerEvent::Completed, this, &AGoKartPawn::HandleBreak);
+
+	Input->BindAction(SteeringInputAction, ETriggerEvent::Triggered, this, &AGoKartPawn::HandleSteering);
+	Input->BindAction(SteeringInputAction, ETriggerEvent::Completed, this, &AGoKartPawn::HandleSteering);
+}
+
+void AGoKartPawn::UpdateLocation(const FVector& DeltaLocation)
+{
+	FHitResult HitResult;
+	AddActorWorldOffset(DeltaLocation, true, &HitResult);
+
+	// Bounce the car
+	if (HitResult.IsValidBlockingHit())
+	{
+		Velocity *= -BounceFactor;
+		CurrentYawSpeed = 0;
+	}
+	
+	// Reset before the next tick
+	AccumulatedForce = FVector::Zero();
+}
+
+void AGoKartPawn::AddKineticFrictionForce()
+{
+	if (FVector UnitVelocity = Velocity; UnitVelocity.Normalize())
+	{
+		AccumulatedForce += -UnitVelocity * Mass * 9.8f * KineticFrictionCoefficient;
+	}
+}
+
+void AGoKartPawn::AddMovingForce(const float DeltaTime)
+{
+	const FQuat RotationDelta = FQuat{GetActorUpVector(), FMath::DegreesToRadians(CurrentYawSpeed * DeltaTime)};
+	Velocity = RotationDelta * Velocity;
+	AddActorWorldRotation(RotationDelta);
+	AccumulatedForce += MovingForce;
 }
 
 void AGoKartPawn::HandleThrottle(const FInputActionValue& ActionValue)
 {
-	CurrentSpeed = Speed * ActionValue.Get<float>();
+	const float ForceMagnitude = ThrottleForce * ActionValue.Get<float>();
+	MovingForce = ForceMagnitude * GetActorForwardVector();
 	UE_LOG(LogKrazyKarts, Log, TEXT("Throttle! %f"), ActionValue.Get<float>());
 }
 
 void AGoKartPawn::HandleBreak(const FInputActionValue& ActionValue)
 {
-	CurrentSpeed = -Speed * ActionValue.Get<float>();
+	const float ForceMagnitude = -ThrottleForce * ActionValue.Get<float>();
+	MovingForce = ForceMagnitude * GetActorForwardVector();
 	UE_LOG(LogKrazyKarts, Log, TEXT("Break! %f"), ActionValue.Get<float>());
+}
+
+void AGoKartPawn::HandleSteering(const FInputActionValue& ActionValue)
+{
+	const float YawFactor = ActionValue.Get<float>();
+	CurrentYawSpeed = YawSpeed * YawFactor;
 }
 

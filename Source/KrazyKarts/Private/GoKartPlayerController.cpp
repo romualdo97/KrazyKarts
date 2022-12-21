@@ -9,7 +9,7 @@
 void AGoKartPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
-
+	
 	if (const ULocalPlayer* LocalPlayer = Cast<ULocalPlayer>(Player))
 	{
 		if (UEnhancedInputLocalPlayerSubsystem* InputSystem = LocalPlayer->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())

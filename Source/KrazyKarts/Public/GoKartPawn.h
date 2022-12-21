@@ -33,20 +33,56 @@ public:
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
 private:
-	UFUNCTION()
-	void HandleThrottle(const FInputActionValue& ActionValue);
-
-	UFUNCTION()
-	void HandleBreak(const FInputActionValue& ActionValue);
-
-	float CurrentSpeed{0};
+	void UpdateLocation(const FVector& DeltaLocation);
+	void AddKineticFrictionForce();
+	void AddMovingForce(float DeltaTime);
 	
+	void HandleThrottle(const FInputActionValue& ActionValue);
+	void HandleBreak(const FInputActionValue& ActionValue);
+	void HandleSteering(const FInputActionValue& ActionValue);
+	
+	/**
+	 * Mass of the vehicle, unit is Kg (Kilograms)
+	 */
 	UPROPERTY(EditAnywhere, Category="Gameplay")
-    float Speed{100}; // cm/s
+	float Mass{100};
 
+	/**
+	 * Magnitude of the acceleration force, unit is N (Newtons)
+	 */
+	UPROPERTY(EditAnywhere, Category="Gameplay")
+    float ThrottleForce{100};
+
+	/**
+	 * The max yaw in degrees
+	 */
+	UPROPERTY(EditAnywhere, Category="Gameplay")
+	float YawSpeed{50};
+	
+	/**
+	 * The constant of proportionality called the coefficient of kinetic friction. It is unitless and dimensionless
+	 */
+	UPROPERTY(EditAnywhere, Category="Gameplay", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
+	float KineticFrictionCoefficient{0.5};
+
+	/**
+	 * Factor to apply when reflecting the velocity
+	 */
+	UPROPERTY(EditAnywhere, Category="Gameplay", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
+	float BounceFactor{0.8};
+	
 	UPROPERTY(EditDefaultsOnly, Category="Input")
 	TObjectPtr<UInputAction> ThrottleInputAction;
 
 	UPROPERTY(EditDefaultsOnly, Category="Input")
 	TObjectPtr<UInputAction> BreakInputAction;
+	
+	UPROPERTY(EditDefaultsOnly, Category="Input")
+	TObjectPtr<UInputAction> SteeringInputAction;
+
+	float CurrentYawSpeed{0};
+	FVector MovingForce{0};
+	FVector AccumulatedForce{0};
+	FVector Acceleration{0};
+	FVector Velocity{0};
 };
