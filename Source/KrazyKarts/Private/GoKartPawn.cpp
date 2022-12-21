@@ -32,6 +32,9 @@ void AGoKartPawn::Tick(float DeltaTime)
 	
 	// Accumulate the tarmac friction force
 	AddKineticFrictionForce();
+
+	// Accumulate the air resistance
+	AddAirResistanceForce();
 	
 	// Calculate acceleration from force then integrate twice to get current position
 	Acceleration = AccumulatedForce / Mass;
@@ -71,7 +74,7 @@ void AGoKartPawn::UpdateLocation(const FVector& DeltaLocation)
 	if (HitResult.IsValidBlockingHit())
 	{
 		Velocity *= -BounceFactor;
-		CurrentYawSpeed = 0;
+		SteeringThrow = 0;
 	}
 	
 	// Reset before the next tick
@@ -86,11 +89,25 @@ void AGoKartPawn::AddKineticFrictionForce()
 	}
 }
 
+void AGoKartPawn::AddAirResistanceForce()
+{
+	if (FVector UnitVelocity = Velocity; UnitVelocity.Normalize())
+	{
+		const float SpeedSquared = Velocity.SizeSquared();
+		AccumulatedForce += -UnitVelocity * SpeedSquared * DragCoefficient;
+	}
+}
+
 void AGoKartPawn::AddMovingForce(const float DeltaTime)
 {
-	const FQuat RotationDelta = FQuat{GetActorUpVector(), FMath::DegreesToRadians(CurrentYawSpeed * DeltaTime)};
-	Velocity = RotationDelta * Velocity;
-	AddActorWorldRotation(RotationDelta);
+	// Dot product to manage reverse
+	// https://en.wikipedia.org/wiki/Turning_radius
+	const float DeltaDistance = FVector::DotProduct(GetActorForwardVector(), Velocity) * DeltaTime;
+	const float DeltaAngle = DeltaDistance / MinTurningRadius * SteeringThrow;
+	const FQuat DeltaRotation{GetActorUpVector(), DeltaAngle};
+	
+	Velocity = DeltaRotation * Velocity;
+	AddActorWorldRotation(DeltaRotation);
 	AccumulatedForce += MovingForce;
 }
 
@@ -110,7 +127,6 @@ void AGoKartPawn::HandleBreak(const FInputActionValue& ActionValue)
 
 void AGoKartPawn::HandleSteering(const FInputActionValue& ActionValue)
 {
-	const float YawFactor = ActionValue.Get<float>();
-	CurrentYawSpeed = YawSpeed * YawFactor;
+	SteeringThrow = ActionValue.Get<float>();
 }
 

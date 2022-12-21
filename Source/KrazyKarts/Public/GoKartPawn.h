@@ -35,6 +35,7 @@ public:
 private:
 	void UpdateLocation(const FVector& DeltaLocation);
 	void AddKineticFrictionForce();
+	void AddAirResistanceForce();
 	void AddMovingForce(float DeltaTime);
 	
 	void HandleThrottle(const FInputActionValue& ActionValue);
@@ -54,10 +55,10 @@ private:
     float ThrottleForce{100};
 
 	/**
-	 * The max yaw in degrees
+	 * The turning radius, unit is m (meters)
 	 */
 	UPROPERTY(EditAnywhere, Category="Gameplay")
-	float YawSpeed{50};
+	float MinTurningRadius{10};
 	
 	/**
 	 * The constant of proportionality called the coefficient of kinetic friction. It is unitless and dimensionless
@@ -65,6 +66,12 @@ private:
 	UPROPERTY(EditAnywhere, Category="Gameplay", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
 	float KineticFrictionCoefficient{0.5};
 
+	/**
+	 * The drag coefficient of air resistance. It is unitless and dimensionless
+	 */
+	UPROPERTY(EditAnywhere, Category="Gameplay", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
+	float DragCoefficient{0.5};
+	
 	/**
 	 * Factor to apply when reflecting the velocity
 	 */
@@ -80,7 +87,7 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category="Input")
 	TObjectPtr<UInputAction> SteeringInputAction;
 
-	float CurrentYawSpeed{0};
+	float SteeringThrow{0};
 	FVector MovingForce{0};
 	FVector AccumulatedForce{0};
 	FVector Acceleration{0};
