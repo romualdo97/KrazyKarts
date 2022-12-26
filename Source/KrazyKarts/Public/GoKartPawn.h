@@ -21,17 +21,18 @@ public:
 	// Sets default values for this pawn's properties
 	AGoKartPawn();
 
-protected:
-	// Called when the game starts or when spawned
-	virtual void BeginPlay() override;
-
-public:	
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
 
+protected:
+	// Called when the game starts or when spawned
+	virtual void BeginPlay() override;
+	
 private:
 	void UpdateLocation(const FVector& DeltaLocation);
 	void AddKineticFrictionForce();
@@ -41,6 +42,19 @@ private:
 	void HandleThrottle(const FInputActionValue& ActionValue);
 	void HandleBreak(const FInputActionValue& ActionValue);
 	void HandleSteering(const FInputActionValue& ActionValue);
+
+	void Throttle(float InputValue);
+	void Break(float InputValue);
+	void Steering(float InputValue);
+	
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerThrottle(float InputValue);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerBreak(float InputValue);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void ServerSteering(float InputValue);
 	
 	/**
 	 * Mass of the vehicle, unit is Kg (Kilograms)
@@ -92,4 +106,10 @@ private:
 	FVector AccumulatedForce{0};
 	FVector Acceleration{0};
 	FVector Velocity{0};
+
+	UPROPERTY(Replicated)
+	FVector ReplicatedLocation{0};
+	
+	UPROPERTY(Replicated)
+	FRotator ReplicatedRotation{0};
 };
