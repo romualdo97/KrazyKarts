@@ -34,8 +34,7 @@ void AGoKartPawn::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME(AGoKartPawn, ReplicatedLocation);
-	DOREPLIFETIME(AGoKartPawn, ReplicatedRotation);
+	DOREPLIFETIME(AGoKartPawn, ReplicatedTransform);
 }
 
 // Called when the game starts or when spawned
@@ -51,34 +50,36 @@ void AGoKartPawn::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	DebugActorRole(this, DeltaTime);
-
+	
+	SimulateLocalUpdate(DeltaTime); // Simulate on clients and on server
 	if (HasAuthority())
 	{
-		// Accumulate the moving force  
-		AddMovingForce(DeltaTime);
-	
-		// Accumulate the tarmac friction force
-		AddKineticFrictionForce();
+		ReplicatedTransform = GetActorTransform();
+	}
+}
 
-		// Accumulate the air resistance
-		AddAirResistanceForce();
+void AGoKartPawn::SimulateLocalUpdate(float DeltaTime)
+{
+	// Accumulate the moving force  
+	AddMovingForce(DeltaTime);
 	
-		// Calculate acceleration from force then integrate twice to get current position
-		Acceleration = AccumulatedForce / Mass;
-		Velocity += DeltaTime * Acceleration;	
-		const FVector DeltaLocation = DeltaTime * Velocity * 100; // convert meters to centimeters
-		UpdateLocation(DeltaLocation);
-	}
-	else
-	{
-		SetActorLocation(ReplicatedLocation);
-		SetActorRotation(ReplicatedRotation);
-	}
+	// Accumulate the tarmac friction force
+	AddKineticFrictionForce();
+
+	// Accumulate the air resistance
+	AddAirResistanceForce();
+	
+	// Calculate acceleration from force then integrate twice to get current position
+	Acceleration = AccumulatedForce / Mass;
+	Velocity += DeltaTime * Acceleration;	
+	const FVector DeltaLocation = DeltaTime * Velocity * 100; // convert meters to centimeters
+	UpdateLocation(DeltaLocation);
 }
 
 // Called to bind functionality to input
 void AGoKartPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
+	// Called only on the Autonomous client
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 	
 	UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(PlayerInputComponent);
@@ -102,7 +103,6 @@ void AGoKartPawn::UpdateLocation(const FVector& DeltaLocation)
 {
 	FHitResult HitResult;
 	AddActorWorldOffset(DeltaLocation, true, &HitResult);
-	ReplicatedLocation = GetActorLocation();
 	
 	// Bounce the car
 	if (HitResult.IsValidBlockingHit())
@@ -142,7 +142,6 @@ void AGoKartPawn::AddMovingForce(const float DeltaTime)
 	
 	Velocity = DeltaRotation * Velocity;
 	AddActorWorldRotation(DeltaRotation);
-	ReplicatedRotation = GetActorRotation();
 	AccumulatedForce += MovingForce;
 }
 
@@ -214,6 +213,13 @@ void AGoKartPawn::Steering(float InputValue)
 {
 	SteeringThrow = InputValue;
 	ServerSteering(InputValue);
+}
+
+void AGoKartPawn::OnReplicatedTransform()
+{
+	/// Called only on clients
+	SetActorTransform(ReplicatedTransform);
+	UE_LOG(LogKrazyKarts, Log, TEXT("Replicated Transform"));
 }
 
 bool AGoKartPawn::ServerSteering_Validate(const float InputValue)

@@ -32,6 +32,8 @@ public:
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
+
+	virtual void SimulateLocalUpdate(float DeltaTime);
 	
 private:
 	void UpdateLocation(const FVector& DeltaLocation);
@@ -55,6 +57,9 @@ private:
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void ServerSteering(float InputValue);
+
+	UFUNCTION()
+	void OnReplicatedTransform();
 	
 	/**
 	 * Mass of the vehicle, unit is Kg (Kilograms)
@@ -107,9 +112,6 @@ private:
 	FVector Acceleration{0};
 	FVector Velocity{0};
 
-	UPROPERTY(Replicated)
-	FVector ReplicatedLocation{0};
-	
-	UPROPERTY(Replicated)
-	FRotator ReplicatedRotation{0};
+	UPROPERTY(ReplicatedUsing=OnReplicatedTransform)
+	FTransform ReplicatedTransform{};
 };
