@@ -34,10 +34,7 @@ void AGoKartPawn::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME(AGoKartPawn, ReplicatedTransform);
-	DOREPLIFETIME(AGoKartPawn, Velocity);
-	DOREPLIFETIME(AGoKartPawn, SteeringThrow);
-	DOREPLIFETIME(AGoKartPawn, CurrentThrottle);
+	DOREPLIFETIME(AGoKartPawn, ServerState);
 }
 
 // Called when the game starts or when spawned
@@ -53,18 +50,43 @@ void AGoKartPawn::Tick(float DeltaTime)
 	Super::Tick(DeltaTime);
 
 	DebugActorRole(this, DeltaTime);
-	
-	SimulateLocalUpdate(DeltaTime); // Simulate on clients and on server
-	if (HasAuthority())
+
+	if (IsLocallyControlled())
 	{
-		ReplicatedTransform = GetActorTransform();
+		// From client execute on the server OR from server execute on the server
+		ServerSendMove(ClientMove);
+	}
+
+	if (GetLocalRole() == ROLE_AutonomousProxy)
+	{
+		// Simulate on autonomous clients
+		ClientMove = SimulateLocalUpdate(ClientMove);
+	}
+	else if (GetLocalRole() == ROLE_SimulatedProxy)
+	{
+		// Use the replicated server state to simulate some other client locally on this client
+		SimulateLocalUpdate(ServerState.LastMove);
+	}
+	else if (GetLocalRole() == ROLE_Authority)
+	{		
+		// Time is set authoritatively by the server
+		ServerMove.DeltaTime = DeltaTime;
+		ServerMove.Time += DeltaTime;
+		
+		// Simulate on server and update the server state (to replicate on all the clients)
+		ServerMove = SimulateLocalUpdate(ServerMove);
+		
+		// Update the server state
+		ServerState.Transform = GetActorTransform();
+		ServerState.Velocity = Velocity;
+		ServerState.LastMove = ServerMove;
 	}
 }
 
-void AGoKartPawn::SimulateLocalUpdate(float DeltaTime)
+FGoKartMove AGoKartPawn::SimulateLocalUpdate(const FGoKartMove& Move)
 {
 	// Accumulate the moving force  
-	AddMovingForce(DeltaTime);
+	AddMovingForce(Move);
 	
 	// Accumulate the tarmac friction force
 	AddKineticFrictionForce();
@@ -74,15 +96,14 @@ void AGoKartPawn::SimulateLocalUpdate(float DeltaTime)
 	
 	// Calculate acceleration from force then integrate twice to get current position
 	Acceleration = AccumulatedForce / Mass;
-	Velocity += DeltaTime * Acceleration;	
-	const FVector DeltaLocation = DeltaTime * Velocity * 100; // convert meters to centimeters
-	UpdateLocation(DeltaLocation);
+	Velocity += Move.DeltaTime * Acceleration;	
+	return UpdateLocation(Move);
 }
 
 // Called to bind functionality to input
 void AGoKartPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
-	// Called only on the Autonomous client
+	// Called only on the Autonomous client or the actor controlled by this authoritative player (serving player)
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 	
 	UEnhancedInputComponent* Input = Cast<UEnhancedInputComponent>(PlayerInputComponent);
@@ -102,8 +123,11 @@ void AGoKartPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 	Input->BindAction(SteeringInputAction, ETriggerEvent::Completed, this, &AGoKartPawn::HandleSteering);
 }
 
-void AGoKartPawn::UpdateLocation(const FVector& DeltaLocation)
+FGoKartMove AGoKartPawn::UpdateLocation(const FGoKartMove& Move)
 {
+	FGoKartMove NewMove{Move};
+	const FVector DeltaLocation = NewMove.DeltaTime * Velocity * 100; // convert meters to centimeters
+
 	FHitResult HitResult;
 	AddActorWorldOffset(DeltaLocation, true, &HitResult);
 	
@@ -111,11 +135,13 @@ void AGoKartPawn::UpdateLocation(const FVector& DeltaLocation)
 	if (HitResult.IsValidBlockingHit())
 	{
 		Velocity *= -BounceFactor;
-		SteeringThrow = 0;
+		NewMove.SteeringThrow = 0;
 	}
 	
 	// Reset before the next tick
 	AccumulatedForce = FVector::Zero();
+
+	return NewMove; // The move object modified because of collisions
 }
 
 void AGoKartPawn::AddKineticFrictionForce()
@@ -134,19 +160,19 @@ void AGoKartPawn::AddAirResistanceForce()
 		AccumulatedForce += -UnitVelocity * SpeedSquared * DragCoefficient;
 	}
 }
-
-void AGoKartPawn::AddMovingForce(const float DeltaTime)
+ 
+void AGoKartPawn::AddMovingForce(const FGoKartMove& Move)
 {
 	// Dot product to manage reverse
 	// https://en.wikipedia.org/wiki/Turning_radius
-	const float DeltaDistance = FVector::DotProduct(GetActorForwardVector(), Velocity) * DeltaTime;
-	const float DeltaAngle = DeltaDistance / MinTurningRadius * SteeringThrow;
+	const float DeltaDistance = FVector::DotProduct(GetActorForwardVector(), Velocity) * Move.DeltaTime;
+	const float DeltaAngle = DeltaDistance / MinTurningRadius * Move.SteeringThrow;
 	const FQuat DeltaRotation{GetActorUpVector(), DeltaAngle};
 	
 	Velocity = DeltaRotation * Velocity;
 	AddActorWorldRotation(DeltaRotation);
 	
-	MovingForce = CurrentThrottle * GetActorForwardVector();
+	MovingForce = ThrottleForce * Move.CurrentThrottle * GetActorForwardVector();
 	AccumulatedForce += MovingForce;
 }
 
@@ -156,25 +182,14 @@ void AGoKartPawn::AddMovingForce(const float DeltaTime)
 void AGoKartPawn::HandleThrottle(const FInputActionValue& ActionValue)
 {
 	Throttle(ActionValue.Get<float>());
-	UE_LOG(LogKrazyKarts, Log, TEXT("Throttle! %f"), ActionValue.Get<float>());
+	//UE_LOG(LogKrazyKarts, Log, TEXT("Throttle! %f"), ActionValue.Get<float>());
 }
 
-void AGoKartPawn::Throttle(float InputValue)
+void AGoKartPawn::Throttle(const float InputValue)
 {
 	// If can bind to input it also means that this actor
 	// is an autonomous proxy
-	CurrentThrottle = ThrottleForce * InputValue;
-	ServerThrottle(InputValue);
-}
-
-bool AGoKartPawn::ServerThrottle_Validate(const float InputValue)
-{
-	return InputValue >= 0.0f && InputValue <= 1.0f;
-}
-
-void AGoKartPawn::ServerThrottle_Implementation(const float InputValue)
-{
-	CurrentThrottle = ThrottleForce * InputValue;
+	ClientMove.CurrentThrottle = InputValue; // Populate client move
 }
 
 // ===================================================
@@ -183,23 +198,12 @@ void AGoKartPawn::ServerThrottle_Implementation(const float InputValue)
 void AGoKartPawn::HandleBreak(const FInputActionValue& ActionValue)
 {
 	Break(ActionValue.Get<float>());
-	UE_LOG(LogKrazyKarts, Log, TEXT("Break! %f"), ActionValue.Get<float>());
+	//UE_LOG(LogKrazyKarts, Log, TEXT("Break! %f"), ActionValue.Get<float>());
 }
 
-void AGoKartPawn::Break(float InputValue)
+void AGoKartPawn::Break(const float InputValue)
 {
-	CurrentThrottle = -ThrottleForce * InputValue;
-	ServerBreak(InputValue);
-}
-
-bool AGoKartPawn::ServerBreak_Validate(const float InputValue)
-{
-	return InputValue >= 0.0f && InputValue <= 1.0f;
-}
-
-void AGoKartPawn::ServerBreak_Implementation(const float InputValue)
-{
-	CurrentThrottle = -ThrottleForce * InputValue;
+	ClientMove.CurrentThrottle = -InputValue; // Populate client move
 }
 
 // ===================================================
@@ -210,25 +214,43 @@ void AGoKartPawn::HandleSteering(const FInputActionValue& ActionValue)
 	Steering(ActionValue.Get<float>());
 }
 
-void AGoKartPawn::Steering(float InputValue)
+void AGoKartPawn::Steering(const float InputValue)
 {
-	SteeringThrow = InputValue;
-	ServerSteering(InputValue);
+	ClientMove.SteeringThrow = InputValue; // Populate client move
 }
 
-void AGoKartPawn::OnReplicatedTransform()
+// ===================================================
+// IMPLEMENT SERVER RPCs (to be executed on the server)
+
+bool AGoKartPawn::ServerSendMove_Validate(const FGoKartMove& Move)
 {
-	/// Called only on clients
-	SetActorTransform(ReplicatedTransform);
-	UE_LOG(LogKrazyKarts, Log, TEXT("Replicated Transform"));
+	if (Move.CurrentThrottle < -1.0f || Move.CurrentThrottle > 1.0f)
+	{
+		UE_LOG(LogKrazyKarts, Error, TEXT("Invalid Move.CurrentThrottle == %f"), Move.CurrentThrottle)
+		return false;
+	}
+	
+	if (Move.SteeringThrow < -1.0f || Move.SteeringThrow > 1.0f)
+	{
+		UE_LOG(LogKrazyKarts, Error, TEXT("Invalid Move.SteeringThrow == %f"), Move.SteeringThrow)
+		return false;
+	}
+	
+	return true;
 }
 
-bool AGoKartPawn::ServerSteering_Validate(const float InputValue)
+void AGoKartPawn::ServerSendMove_Implementation(const FGoKartMove& Move)
 {
-	return InputValue >= -1.0f && InputValue <= 1.0f;
+	ServerMove = Move;
 }
 
-void AGoKartPawn::ServerSteering_Implementation(const float InputValue)
+// ===================================================
+// HANDLE REPLICATION RECEIVED ON CLIENTS
+
+void AGoKartPawn::OnReplicatedServerState()
 {
-	SteeringThrow = InputValue;
+	// Called only on clients
+	SetActorTransform(ServerState.Transform);
+	Velocity = ServerState.Velocity;
+	ClientMove = ServerState.LastMove;
 }

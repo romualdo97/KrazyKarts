@@ -22,10 +22,10 @@ struct FGoKartMove
 	float CurrentThrottle{0};
 
 	UPROPERTY()
-	float DeltaTime;
+	float DeltaTime{0};
 
 	UPROPERTY()
-	float Time;
+	float Time{0};
 };
 
 USTRUCT()
@@ -47,7 +47,7 @@ struct FGoKartState
 // https://docs.unrealengine.com/5.1/en-US/input-overview-in-unreal-engine/
 // https://docs.unrealengine.com/5.1/en-US/enhanced-input-in-unreal-engine/
 UCLASS(Abstract)
-class KRAZYKARTS_API AGoKartPawn : public APawn
+class KRAZYKARTS_API AGoKartPawn final : public APawn
 {
 	GENERATED_BODY()
 
@@ -67,14 +67,15 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
-	virtual void SimulateLocalUpdate(float DeltaTime);
+	FGoKartMove SimulateLocalUpdate(const FGoKartMove& Move);
 	
 private:
-	void UpdateLocation(const FVector& DeltaLocation);
+	FGoKartMove UpdateLocation(const FGoKartMove& Move);
 	void AddKineticFrictionForce();
 	void AddAirResistanceForce();
-	void AddMovingForce(float DeltaTime);
-	
+	void AddMovingForce(const FGoKartMove& Move);
+
+	// CLIENT @ INPUT
 	void HandleThrottle(const FInputActionValue& ActionValue);
 	void HandleBreak(const FInputActionValue& ActionValue);
 	void HandleSteering(const FInputActionValue& ActionValue);
@@ -82,18 +83,13 @@ private:
 	void Throttle(float InputValue);
 	void Break(float InputValue);
 	void Steering(float InputValue);
+	// END CLIENT @ INPUT
 	
 	UFUNCTION(Server, Reliable, WithValidation)
-	void ServerThrottle(float InputValue);
-
-	UFUNCTION(Server, Reliable, WithValidation)
-	void ServerBreak(float InputValue);
-
-	UFUNCTION(Server, Reliable, WithValidation)
-	void ServerSteering(float InputValue);
+	void ServerSendMove(const FGoKartMove& Move); // Request to be execute on the server (Request started on some client)
 
 	UFUNCTION()
-	void OnReplicatedTransform();
+	void OnReplicatedServerState(); // Called on clients
 	
 	/**
 	 * Mass of the vehicle, unit is Kg (Kilograms)
@@ -140,20 +136,13 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category="Input")
 	TObjectPtr<UInputAction> SteeringInputAction;
 
+	UPROPERTY(ReplicatedUsing=OnReplicatedServerState)
+	FGoKartState ServerState;
 	
-	UPROPERTY(Replicated)
-	float SteeringThrow{0}; // Replicate variables changed by player input to smooth simulated proxies
-
-	UPROPERTY(Replicated)
-	float CurrentThrottle{0}; // Replicate variables changed by player input to smooth simulated proxies
-	
+	FGoKartMove ClientMove{};
+	FGoKartMove ServerMove{};
 	FVector MovingForce{0};
 	FVector AccumulatedForce{0};
 	FVector Acceleration{0};
-
-	UPROPERTY(Replicated)
 	FVector Velocity{0};
-
-	UPROPERTY(ReplicatedUsing=OnReplicatedTransform)
-	FTransform ReplicatedTransform{};
 };
