@@ -10,6 +10,40 @@
 class UInputComponent;
 class UInputAction;
 
+USTRUCT()
+struct FGoKartMove
+{
+	GENERATED_BODY()
+	
+	UPROPERTY()
+	float SteeringThrow{0};
+
+	UPROPERTY()
+	float CurrentThrottle{0};
+
+	UPROPERTY()
+	float DeltaTime;
+
+	UPROPERTY()
+	float Time;
+};
+
+USTRUCT()
+struct FGoKartState
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FVector Velocity;
+
+	UPROPERTY()
+	FTransform Transform;
+	
+	UPROPERTY()
+	FGoKartMove LastMove;
+};
+
+
 // https://docs.unrealengine.com/5.1/en-US/input-overview-in-unreal-engine/
 // https://docs.unrealengine.com/5.1/en-US/enhanced-input-in-unreal-engine/
 UCLASS(Abstract)
@@ -106,10 +140,18 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category="Input")
 	TObjectPtr<UInputAction> SteeringInputAction;
 
-	float SteeringThrow{0};
+	
+	UPROPERTY(Replicated)
+	float SteeringThrow{0}; // Replicate variables changed by player input to smooth simulated proxies
+
+	UPROPERTY(Replicated)
+	float CurrentThrottle{0}; // Replicate variables changed by player input to smooth simulated proxies
+	
 	FVector MovingForce{0};
 	FVector AccumulatedForce{0};
 	FVector Acceleration{0};
+
+	UPROPERTY(Replicated)
 	FVector Velocity{0};
 
 	UPROPERTY(ReplicatedUsing=OnReplicatedTransform)

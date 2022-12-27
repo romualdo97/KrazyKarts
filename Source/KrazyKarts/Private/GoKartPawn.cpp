@@ -35,6 +35,9 @@ void AGoKartPawn::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifet
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(AGoKartPawn, ReplicatedTransform);
+	DOREPLIFETIME(AGoKartPawn, Velocity);
+	DOREPLIFETIME(AGoKartPawn, SteeringThrow);
+	DOREPLIFETIME(AGoKartPawn, CurrentThrottle);
 }
 
 // Called when the game starts or when spawned
@@ -142,6 +145,8 @@ void AGoKartPawn::AddMovingForce(const float DeltaTime)
 	
 	Velocity = DeltaRotation * Velocity;
 	AddActorWorldRotation(DeltaRotation);
+	
+	MovingForce = CurrentThrottle * GetActorForwardVector();
 	AccumulatedForce += MovingForce;
 }
 
@@ -158,8 +163,7 @@ void AGoKartPawn::Throttle(float InputValue)
 {
 	// If can bind to input it also means that this actor
 	// is an autonomous proxy
-	const float ForceMagnitude = ThrottleForce * InputValue;
-	MovingForce = ForceMagnitude * GetActorForwardVector();
+	CurrentThrottle = ThrottleForce * InputValue;
 	ServerThrottle(InputValue);
 }
 
@@ -170,8 +174,7 @@ bool AGoKartPawn::ServerThrottle_Validate(const float InputValue)
 
 void AGoKartPawn::ServerThrottle_Implementation(const float InputValue)
 {
-	const float ForceMagnitude = ThrottleForce * InputValue;
-	MovingForce = ForceMagnitude * GetActorForwardVector();
+	CurrentThrottle = ThrottleForce * InputValue;
 }
 
 // ===================================================
@@ -185,8 +188,7 @@ void AGoKartPawn::HandleBreak(const FInputActionValue& ActionValue)
 
 void AGoKartPawn::Break(float InputValue)
 {
-	const float ForceMagnitude = -ThrottleForce * InputValue;
-	MovingForce = ForceMagnitude * GetActorForwardVector();
+	CurrentThrottle = -ThrottleForce * InputValue;
 	ServerBreak(InputValue);
 }
 
@@ -197,8 +199,7 @@ bool AGoKartPawn::ServerBreak_Validate(const float InputValue)
 
 void AGoKartPawn::ServerBreak_Implementation(const float InputValue)
 {
-	const float ForceMagnitude = -ThrottleForce * InputValue;
-	MovingForce = ForceMagnitude * GetActorForwardVector();
+	CurrentThrottle = -ThrottleForce * InputValue;
 }
 
 // ===================================================
