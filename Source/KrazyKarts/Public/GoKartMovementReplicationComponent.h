@@ -45,6 +45,8 @@ public:
 private:
 	void ClearUnacknowledgedMoves(const FGoKartMove& LastServerMove);
 
+	void UpdateServerState(const FGoKartMove& Move);
+	
 	UFUNCTION(Server, Reliable, WithValidation)
 	void ServerSendMove(const FGoKartMove& Move); // Request to be execute on the server (Request started on some client)
 

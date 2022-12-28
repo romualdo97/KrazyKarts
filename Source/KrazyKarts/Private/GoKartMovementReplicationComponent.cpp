@@ -49,24 +49,26 @@ void UGoKartMovementReplicationComponent::TickComponent(float DeltaTime, ELevelT
 
 	if (Pawn->IsLocallyControlled())
 	{
-		const FGoKartMove Move = MovementComponent->CreateMoveData(DeltaTime);
-		// UE_LOG(LogKrazyKarts, Log, TEXT("Move.SteeringThrow == %f && Move.Throttle == %f && Move.Time == %f && Move.DeltaTime == %f"), Move.SteeringThrow, Move.Throttle, Move.Time, Move.DeltaTime);
-
-		// Simulated Proxy doesn't gets here, so we don't use "!HasAuthority()" just
-		// for sake of clarity
+		const FGoKartMove LastMove = MovementComponent->GetLastMove();
+		
 		if (Pawn->GetLocalRole() == ROLE_AutonomousProxy)
 		{
 			// Add client move's to the buffer of unacknowledged player moves
-			UnacknowledgedMoves.Add(Move);
+			UnacknowledgedMoves.Add(LastMove);
 			// UE_LOG(LogKrazyKarts, Log, TEXT("UnacknowledgedMoves.Num() == %i"), UnacknowledgedMoves.Num());
-			
-			// Simulate on autonomous clients
-			MovementComponent->SimulateMoveTick(Move);
+
+			// Called from client and executed on the server (client request goes over network, has latency)
+			ServerSendMove(LastMove);
 		}
-				
-		// From client execute on the server (client request goes over network, has latency)
-		// OR from server execute on the server (no request goes over network, zero latency and it calls simulate)
-		ServerSendMove(Move);
+		else
+		{
+			// Just update state if is an Authoritative locally controlled player on the server so we avoid simulating twice
+			UpdateServerState(LastMove);
+		}
+
+		// Called from client executed on the server (client request goes over network, has latency)
+		// OR Called from server and executed on the server (no request goes over network, zero latency and it calls simulate)
+		// ServerSendMove(LastMove);
 	}
 	else if (Pawn->GetLocalRole() == ROLE_SimulatedProxy)
 	{
@@ -87,6 +89,14 @@ void UGoKartMovementReplicationComponent::ClearUnacknowledgedMoves(const FGoKart
 	}
 
 	UnacknowledgedMoves = NewMoves;
+}
+
+void UGoKartMovementReplicationComponent::UpdateServerState(const FGoKartMove& Move)
+{
+	// Update the server state
+	ServerState.LastMove = Move;
+	ServerState.Transform = GetOwner()->GetActorTransform();
+	ServerState.Velocity = MovementComponent->GetVelocity();
 }
 
 // ===================================================
@@ -123,13 +133,8 @@ void UGoKartMovementReplicationComponent::ServerSendMove_Implementation(const FG
 	// https://bugs.mojang.com/browse/MCPE-102760
 	// https://forum.unity.com/threads/glitchy-client-side-prediction.1192453/	
 	
-	// Simulate on server
 	MovementComponent->SimulateMoveTick(Move);
-	
-	// Update the server state
-	ServerState.Transform = GetOwner()->GetActorTransform();
-	ServerState.Velocity = MovementComponent->GetVelocity();
-	ServerState.LastMove = Move;
+	UpdateServerState(Move);
 }
 
 // ===================================================

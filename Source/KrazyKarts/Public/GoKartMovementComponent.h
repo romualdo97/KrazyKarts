@@ -51,7 +51,9 @@ public:
 	void SetSteeringThrow(const float Value) { SteeringThrow = Value; }
 	void SetThrottle(const float Value) { Throttle = Value; }
 	void SetVelocity(const FVector& InVelocity) { Velocity = InVelocity; }
+	void SetLastMove(const FGoKartMove& InMove) { LastMove = InMove; }
 	FVector GetVelocity() const { return Velocity; }
+	FGoKartMove GetLastMove() const { return LastMove; }
 	
 private:
 	void AddKineticFrictionForce();
@@ -94,11 +96,12 @@ private:
 	 */
 	UPROPERTY(EditAnywhere, Category="Gameplay", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
 	float BounceFactor{0.8};
-	
+
 	float SteeringThrow{0};
 	float Throttle{0};
 	FVector MovingForce{0};
 	FVector AccumulatedForce{0};
 	FVector Acceleration{0};
 	FVector Velocity{0};
+	FGoKartMove	LastMove;
 };

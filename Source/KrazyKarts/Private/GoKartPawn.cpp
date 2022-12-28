@@ -31,8 +31,8 @@ AGoKartPawn::AGoKartPawn()
 
 	// Create components
 	MovementComponent = CreateDefaultSubobject<UGoKartMovementComponent>(TEXT("Go Kart Movement Component"));
-	//ReplicationComponent = CreateDefaultSubobject<UGoKartMovementReplicationComponent>(TEXT("Go Kart Movement Replication Component"));
-	check(MovementComponent); //check(ReplicationComponent);
+	ReplicationComponent = CreateDefaultSubobject<UGoKartMovementReplicationComponent>(TEXT("Go Kart Movement Replication Component"));
+	check(MovementComponent); check(ReplicationComponent);
 }
 
 // Called when the game starts or when spawned

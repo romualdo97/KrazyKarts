@@ -33,8 +33,15 @@ void UGoKartMovementComponent::TickComponent(float DeltaTime, ELevelTick TickTyp
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	const FGoKartMove Move = CreateMoveData(DeltaTime);
-	SimulateMoveTick(Move);
+	const APawn* Pawn = GetOwner<APawn>();
+	if (Pawn == nullptr) return;
+
+	// AutonomousProxy OR Authoritative player in server
+	if (Pawn->IsLocallyControlled())
+	{
+		LastMove = CreateMoveData(DeltaTime);
+		SimulateMoveTick(LastMove);
+	}
 }
 
 
