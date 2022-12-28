@@ -28,20 +28,17 @@ AGoKartPawn::AGoKartPawn()
  	// Set this pawn to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
-}
 
-void AGoKartPawn::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
-{
-	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
-
-	DOREPLIFETIME(AGoKartPawn, ServerState);
+	// Create components
+	MovementComponent = CreateDefaultSubobject<UGoKartMovementComponent>(TEXT("Go Kart Movement Component"));
+	//ReplicationComponent = CreateDefaultSubobject<UGoKartMovementReplicationComponent>(TEXT("Go Kart Movement Replication Component"));
+	check(MovementComponent); //check(ReplicationComponent);
 }
 
 // Called when the game starts or when spawned
 void AGoKartPawn::BeginPlay()
 {
 	Super::BeginPlay();
-	// NetUpdateFrequency
 }
 
 // Called every frame
@@ -49,55 +46,8 @@ void AGoKartPawn::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	// Debug role
 	DebugActorRole(this, DeltaTime);
-
-	if (IsLocallyControlled())
-	{
-		// Simulated Proxy doesn't gets here, so we don't use "!HasAuthority()"
-		if (GetLocalRole() == ROLE_AutonomousProxy)
-		{
-			UnacknowledgedMoves.Add(ClientMove); // Add client move's to the buffer of unacknowledged player moves
-			UE_LOG(LogKrazyKarts, Log, TEXT("UnacknowledgedMoves.Num() == %i"), UnacknowledgedMoves.Num());
-		}
-
-		// World TimeSeconds vs. ServerWorld TimeSeconds
-		// Right, I think the way that time is being used here is kind of like an incremental
-		// index that’s determined only by the client and compared only agains the client’s “indeces”.
-		// https://community.gamedev.tv/t/world-timeseconds-vs-serverworld-timeseconds/73314
-		ClientMove.DeltaTime = DeltaTime;
-		ClientMove.Time += DeltaTime;
-		
-		// From client execute on the server OR from server execute on the server
-		ServerSendMove(ClientMove);
-	}
-
-	if (GetLocalRole() == ROLE_AutonomousProxy)
-	{
-		// Simulate on autonomous clients
-		ClientMove = SimulateLocalUpdate(ClientMove);
-	}
-	else if (GetLocalRole() == ROLE_SimulatedProxy)
-	{
-		// Use the replicated server state to simulate some other client locally on this client
-		SimulateLocalUpdate(ServerState.LastMove);
-	}
-}
-
-FGoKartMove AGoKartPawn::SimulateLocalUpdate(const FGoKartMove& Move)
-{
-	// Accumulate the moving force  
-	AddMovingForce(Move);
-	
-	// Accumulate the tarmac friction force
-	AddKineticFrictionForce();
-
-	// Accumulate the air resistance
-	AddAirResistanceForce();
-	
-	// Calculate acceleration from force then integrate twice to get current position
-	Acceleration = AccumulatedForce / Mass;
-	Velocity += Move.DeltaTime * Acceleration;	
-	return UpdateLocation(Move);
 }
 
 // Called to bind functionality to input
@@ -123,87 +73,21 @@ void AGoKartPawn::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 	Input->BindAction(SteeringInputAction, ETriggerEvent::Completed, this, &AGoKartPawn::HandleSteering);
 }
 
-FGoKartMove AGoKartPawn::UpdateLocation(const FGoKartMove& Move)
-{
-	FGoKartMove NewMove{Move};
-	const FVector DeltaLocation = NewMove.DeltaTime * Velocity * 100; // convert meters to centimeters
-
-	FHitResult HitResult;
-	AddActorWorldOffset(DeltaLocation, true, &HitResult);
-	
-	// Bounce the car
-	if (HitResult.IsValidBlockingHit())
-	{
-		Velocity *= -BounceFactor;
-		NewMove.SteeringThrow = 0;
-	}
-	
-	// Reset before the next tick
-	AccumulatedForce = FVector::Zero();
-
-	return NewMove; // The move object modified because of collisions
-}
-
-void AGoKartPawn::AddKineticFrictionForce()
-{
-	if (FVector UnitVelocity = Velocity; UnitVelocity.Normalize())
-	{
-		AccumulatedForce += -UnitVelocity * Mass * 9.8f * KineticFrictionCoefficient;
-	}
-}
-
-void AGoKartPawn::AddAirResistanceForce()
-{
-	if (FVector UnitVelocity = Velocity; UnitVelocity.Normalize())
-	{
-		const float SpeedSquared = Velocity.SizeSquared();
-		AccumulatedForce += -UnitVelocity * SpeedSquared * DragCoefficient;
-	}
-}
- 
-void AGoKartPawn::AddMovingForce(const FGoKartMove& Move)
-{
-	// Dot product to manage reverse
-	// https://en.wikipedia.org/wiki/Turning_radius
-	const float DeltaDistance = FVector::DotProduct(GetActorForwardVector(), Velocity) * Move.DeltaTime;
-	const float DeltaAngle = DeltaDistance / MinTurningRadius * Move.SteeringThrow;
-	const FQuat DeltaRotation{GetActorUpVector(), DeltaAngle};
-	
-	Velocity = DeltaRotation * Velocity;
-	AddActorWorldRotation(DeltaRotation);
-	
-	MovingForce = ThrottleForce * Move.CurrentThrottle * GetActorForwardVector();
-	AccumulatedForce += MovingForce;
-}
-
-void AGoKartPawn::ClearUnacknowledgedMoves(const FGoKartMove& LastServerMove)
-{
-	TArray<FGoKartMove> NewMoves;
-	for (const FGoKartMove& Move : UnacknowledgedMoves)
-	{
-		if (Move.Time > LastServerMove.Time)
-		{
-			NewMoves.Add(Move);
-		}
-	}
-
-	UnacknowledgedMoves = NewMoves;
-}
-
 // ===================================================
 // THROTTLE
 
 void AGoKartPawn::HandleThrottle(const FInputActionValue& ActionValue)
 {
 	Throttle(ActionValue.Get<float>());
-	//UE_LOG(LogKrazyKarts, Log, TEXT("Throttle! %f"), ActionValue.Get<float>());
+	UE_LOG(LogKrazyKarts, Log, TEXT("Throttle! %f"), ActionValue.Get<float>());
 }
 
+// ReSharper disable once CppMemberFunctionMayBeConst
 void AGoKartPawn::Throttle(const float InputValue)
 {
 	// If can bind to input it also means that this actor
 	// is an autonomous proxy
-	ClientMove.CurrentThrottle = InputValue; // Populate client move
+	MovementComponent->SetThrottle(InputValue); // Populate client move
 }
 
 // ===================================================
@@ -212,12 +96,13 @@ void AGoKartPawn::Throttle(const float InputValue)
 void AGoKartPawn::HandleBreak(const FInputActionValue& ActionValue)
 {
 	Break(ActionValue.Get<float>());
-	//UE_LOG(LogKrazyKarts, Log, TEXT("Break! %f"), ActionValue.Get<float>());
+	UE_LOG(LogKrazyKarts, Log, TEXT("Break! %f"), ActionValue.Get<float>());
 }
 
+// ReSharper disable once CppMemberFunctionMayBeConst
 void AGoKartPawn::Break(const float InputValue)
 {
-	ClientMove.CurrentThrottle = -InputValue; // Populate client move
+	MovementComponent->SetThrottle(-InputValue); // Populate client move
 }
 
 // ===================================================
@@ -228,66 +113,9 @@ void AGoKartPawn::HandleSteering(const FInputActionValue& ActionValue)
 	Steering(ActionValue.Get<float>());
 }
 
+// ReSharper disable once CppMemberFunctionMayBeConst
 void AGoKartPawn::Steering(const float InputValue)
 {
-	ClientMove.SteeringThrow = InputValue; // Populate client move
+	MovementComponent->SetSteeringThrow(InputValue); // Populate client move
 }
 
-// ===================================================
-// IMPLEMENT SERVER RPCs (to be executed on the server)
-
-bool AGoKartPawn::ServerSendMove_Validate(const FGoKartMove& Move)
-{
-	if (Move.CurrentThrottle < -1.0f || Move.CurrentThrottle > 1.0f)
-	{
-		UE_LOG(LogKrazyKarts, Error, TEXT("Invalid Move.CurrentThrottle == %f"), Move.CurrentThrottle)
-		return false;
-	}
-	
-	if (Move.SteeringThrow < -1.0f || Move.SteeringThrow > 1.0f)
-	{
-		UE_LOG(LogKrazyKarts, Error, TEXT("Invalid Move.SteeringThrow == %f"), Move.SteeringThrow)
-		return false;
-	}
-	
-	return true;
-}
-
-void AGoKartPawn::ServerSendMove_Implementation(const FGoKartMove& Move)
-{
-	// NOTE: Doing here and not on Tick because otherwise the server would be simulating
-	// with the last received input and would cause the client to move back to the last "speculative"
-	// server state
-	// https://bugs.mojang.com/browse/MCPE-102760
-	// https://forum.unity.com/threads/glitchy-client-side-prediction.1192453/	
-	
-	// Simulate on server and update the server state (to replicate on all the clients)
-	ServerMove = SimulateLocalUpdate(Move);
-		
-	// Update the server state
-	ServerState.Transform = GetActorTransform();
-	ServerState.Velocity = Velocity;
-	ServerState.LastMove = ServerMove;
-}
-
-// ===================================================
-// HANDLE REPLICATION RECEIVED ON CLIENTS
-
-void AGoKartPawn::OnReplicatedServerState()
-{
-	// Called only on clients
-	SetActorTransform(ServerState.Transform);
-	Velocity = ServerState.Velocity;
-	ClientMove = ServerState.LastMove;
-
-	// Clear moves generated previously than last server replicated move
-	ClearUnacknowledgedMoves(ServerState.LastMove);
-
-	// Simulate client moves that are ahead of the last server response
-	FGoKartMove FinalSimulatedMove;
-	for (const FGoKartMove& Move : UnacknowledgedMoves)
-	{
-		FinalSimulatedMove = SimulateLocalUpdate(Move);
-	}
-	ClientMove = FinalSimulatedMove;
-}
