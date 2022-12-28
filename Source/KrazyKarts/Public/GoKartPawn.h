@@ -34,13 +34,13 @@ struct FGoKartState
 	GENERATED_BODY()
 
 	UPROPERTY()
-	FVector Velocity;
+	FVector Velocity{0};
 
 	UPROPERTY()
-	FTransform Transform;
+	FTransform Transform{};
 	
 	UPROPERTY()
-	FGoKartMove LastMove;
+	FGoKartMove LastMove{};
 };
 
 
@@ -74,6 +74,7 @@ private:
 	void AddKineticFrictionForce();
 	void AddAirResistanceForce();
 	void AddMovingForce(const FGoKartMove& Move);
+	void ClearUnacknowledgedMoves(const FGoKartMove& LastServerMove);
 
 	// CLIENT @ INPUT
 	void HandleThrottle(const FInputActionValue& ActionValue);
@@ -145,4 +146,5 @@ private:
 	FVector AccumulatedForce{0};
 	FVector Acceleration{0};
 	FVector Velocity{0};
+	TArray<FGoKartMove> UnacknowledgedMoves;
 };

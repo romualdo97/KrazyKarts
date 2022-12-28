@@ -53,6 +53,20 @@ void AGoKartPawn::Tick(float DeltaTime)
 
 	if (IsLocallyControlled())
 	{
+		// Simulated Proxy doesn't gets here, so we don't use "!HasAuthority()"
+		if (GetLocalRole() == ROLE_AutonomousProxy)
+		{
+			UnacknowledgedMoves.Add(ClientMove); // Add client move's to the buffer of unacknowledged player moves
+			UE_LOG(LogKrazyKarts, Log, TEXT("UnacknowledgedMoves.Num() == %i"), UnacknowledgedMoves.Num());
+		}
+
+		// World TimeSeconds vs. ServerWorld TimeSeconds
+		// Right, I think the way that time is being used here is kind of like an incremental
+		// index that’s determined only by the client and compared only agains the client’s “indeces”.
+		// https://community.gamedev.tv/t/world-timeseconds-vs-serverworld-timeseconds/73314
+		ClientMove.DeltaTime = DeltaTime;
+		ClientMove.Time += DeltaTime;
+		
 		// From client execute on the server OR from server execute on the server
 		ServerSendMove(ClientMove);
 	}
@@ -66,20 +80,6 @@ void AGoKartPawn::Tick(float DeltaTime)
 	{
 		// Use the replicated server state to simulate some other client locally on this client
 		SimulateLocalUpdate(ServerState.LastMove);
-	}
-	else if (GetLocalRole() == ROLE_Authority)
-	{		
-		// Time is set authoritatively by the server
-		ServerMove.DeltaTime = DeltaTime;
-		ServerMove.Time += DeltaTime;
-		
-		// Simulate on server and update the server state (to replicate on all the clients)
-		ServerMove = SimulateLocalUpdate(ServerMove);
-		
-		// Update the server state
-		ServerState.Transform = GetActorTransform();
-		ServerState.Velocity = Velocity;
-		ServerState.LastMove = ServerMove;
 	}
 }
 
@@ -176,6 +176,20 @@ void AGoKartPawn::AddMovingForce(const FGoKartMove& Move)
 	AccumulatedForce += MovingForce;
 }
 
+void AGoKartPawn::ClearUnacknowledgedMoves(const FGoKartMove& LastServerMove)
+{
+	TArray<FGoKartMove> NewMoves;
+	for (const FGoKartMove& Move : UnacknowledgedMoves)
+	{
+		if (Move.Time > LastServerMove.Time)
+		{
+			NewMoves.Add(Move);
+		}
+	}
+
+	UnacknowledgedMoves = NewMoves;
+}
+
 // ===================================================
 // THROTTLE
 
@@ -241,7 +255,19 @@ bool AGoKartPawn::ServerSendMove_Validate(const FGoKartMove& Move)
 
 void AGoKartPawn::ServerSendMove_Implementation(const FGoKartMove& Move)
 {
-	ServerMove = Move;
+	// NOTE: Doing here and not on Tick because otherwise the server would be simulating
+	// with the last received input and would cause the client to move back to the last "speculative"
+	// server state
+	// https://bugs.mojang.com/browse/MCPE-102760
+	// https://forum.unity.com/threads/glitchy-client-side-prediction.1192453/	
+	
+	// Simulate on server and update the server state (to replicate on all the clients)
+	ServerMove = SimulateLocalUpdate(Move);
+		
+	// Update the server state
+	ServerState.Transform = GetActorTransform();
+	ServerState.Velocity = Velocity;
+	ServerState.LastMove = ServerMove;
 }
 
 // ===================================================
@@ -253,4 +279,15 @@ void AGoKartPawn::OnReplicatedServerState()
 	SetActorTransform(ServerState.Transform);
 	Velocity = ServerState.Velocity;
 	ClientMove = ServerState.LastMove;
+
+	// Clear moves generated previously than last server replicated move
+	ClearUnacknowledgedMoves(ServerState.LastMove);
+
+	// Simulate client moves that are ahead of the last server response
+	FGoKartMove FinalSimulatedMove;
+	for (const FGoKartMove& Move : UnacknowledgedMoves)
+	{
+		FinalSimulatedMove = SimulateLocalUpdate(Move);
+	}
+	ClientMove = FinalSimulatedMove;
 }
