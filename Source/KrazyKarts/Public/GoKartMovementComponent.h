@@ -46,7 +46,6 @@ public:
 	                           FActorComponentTickFunction* ThisTickFunction) override;
 
 	// Update actor transform from move data
-	FGoKartMove CreateMoveData(float DeltaTime) const;
 	void SimulateMoveTick(const FGoKartMove& Move);
 	void SetSteeringThrow(const float Value) { SteeringThrow = Value; }
 	void SetThrottle(const float Value) { Throttle = Value; }
@@ -56,6 +55,7 @@ public:
 	FGoKartMove GetLastMove() const { return LastMove; }
 	
 private:
+	FGoKartMove CreateMoveData(float DeltaTime) const;
 	void AddKineticFrictionForce();
 	void AddAirResistanceForce();
 	void AddMovingForce(const FGoKartMove& Move);
