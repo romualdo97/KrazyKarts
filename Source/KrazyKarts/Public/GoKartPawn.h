@@ -43,7 +43,15 @@ private:
 	void Break(float InputValue);
 	void Steering(float InputValue);
 	// END CLIENT @ INPUT
-		
+
+protected:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	TObjectPtr<UGoKartMovementComponent> MovementComponent;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	TObjectPtr<UGoKartMovementReplicationComponent> ReplicationComponent;
+
+private:
 	UPROPERTY(EditDefaultsOnly, Category="Input")
 	TObjectPtr<UInputAction> ThrottleInputAction;
 
@@ -52,10 +60,4 @@ private:
 	
 	UPROPERTY(EditDefaultsOnly, Category="Input")
 	TObjectPtr<UInputAction> SteeringInputAction;
-
-	UPROPERTY(VisibleAnywhere)
-	TObjectPtr<UGoKartMovementComponent> MovementComponent;
-	
-	UPROPERTY(VisibleAnywhere)
-	TObjectPtr<UGoKartMovementReplicationComponent> ReplicationComponent;
 };

@@ -59,6 +59,10 @@ private:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void ServerSendMove(const FGoKartMove& Move);
 
+	// Set the mesh offset root
+	UFUNCTION(BlueprintCallable)
+	void SetMeshOffsetRoot(USceneComponent* InSceneComponent) { MeshOffsetRoot = InSceneComponent; }
+	
 	// Called on clients when new ServerState data is available
 	UFUNCTION()
 	void OnReplicatedServerState();
@@ -72,6 +76,9 @@ private:
 	// If true location and velocity on simulated proxies will be interpolated using cubic interpolation, otherwise we interpolate using linear
 	UPROPERTY(EditDefaultsOnly)
 	bool bSimulatedProxyUsesCubicInterpolation{true}; 
+
+	UPROPERTY()
+	TObjectPtr<USceneComponent> MeshOffsetRoot;
 	
 	UPROPERTY()
 	TObjectPtr<UGoKartMovementComponent> MovementComponent; // Cache the movement component
@@ -80,4 +87,6 @@ private:
 	FVector StartVelocityForSimulatedProxy; // Only for simulated proxies
 	float ClientTimeSinceLastReplication{0.0f}; // Only for simulated proxies
 	float ClientTimeBetweenLastReplication{0.0f}; // Only for simulated proxies
+
+	float ClientSimulatedTime; // Only on server, tracks the time simulated by the client
 };

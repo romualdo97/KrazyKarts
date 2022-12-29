@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "KrazyKarts/KrazyKarts.h"
 #include "GoKartMovementComponent.generated.h"
 
 /**
@@ -13,7 +14,7 @@ USTRUCT()
 struct FGoKartMove
 {
 	GENERATED_BODY()
-	
+
 	UPROPERTY()
 	float SteeringThrow{0};
 
@@ -25,6 +26,23 @@ struct FGoKartMove
 
 	UPROPERTY()
 	float Time{0};
+
+	bool IsValid() const
+	{
+		if (Throttle < -1.0f || Throttle > 1.0f)
+		{
+			UE_LOG(LogKrazyKarts, Error, TEXT("Invalid CurrentThrottle == %f"), Throttle)
+			return false;
+		}
+	
+		if (SteeringThrow < -1.0f || SteeringThrow > 1.0f)
+		{
+			UE_LOG(LogKrazyKarts, Error, TEXT("Invalid SteeringThrow == %f"), SteeringThrow)
+			return false;
+		}
+		
+		return true;
+	}
 };
 
 UCLASS(ClassGroup=(Custom), meta=(BlueprintSpawnableComponent))
@@ -53,14 +71,14 @@ public:
 	void SetLastMove(const FGoKartMove& InMove) { LastMove = InMove; }
 	FVector GetVelocity() const { return Velocity; }
 	FGoKartMove GetLastMove() const { return LastMove; }
-	
+
 private:
 	FGoKartMove CreateMoveData(float DeltaTime) const;
 	void AddKineticFrictionForce();
 	void AddAirResistanceForce();
 	void AddMovingForce(const FGoKartMove& Move);
 	void UpdateLocation(const FGoKartMove& Move);
-	
+
 	/**
 	 * Mass of the vehicle, unit is Kg (Kilograms)
 	 */
@@ -78,23 +96,26 @@ private:
 	 */
 	UPROPERTY(EditAnywhere, Category="Gameplay")
 	float MinTurningRadius{10};
-	
+
 	/**
 	 * The constant of proportionality called the coefficient of kinetic friction. It is unitless and dimensionless
 	 */
-	UPROPERTY(EditAnywhere, Category="Gameplay", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
+	UPROPERTY(EditAnywhere, Category="Gameplay",
+		meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
 	float KineticFrictionCoefficient{0.5};
 
 	/**
 	 * The drag coefficient of air resistance. It is unitless and dimensionless
 	 */
-	UPROPERTY(EditAnywhere, Category="Gameplay", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
+	UPROPERTY(EditAnywhere, Category="Gameplay",
+		meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
 	float DragCoefficient{0.5};
-	
+
 	/**
 	 * Factor to apply when reflecting the velocity
 	 */
-	UPROPERTY(EditAnywhere, Category="Gameplay", meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
+	UPROPERTY(EditAnywhere, Category="Gameplay",
+		meta = (ClampMin = "0.0", ClampMax = "1.0", UIMin = "0.0", UIMax = "1.0"))
 	float BounceFactor{0.8};
 
 	float SteeringThrow{0};
@@ -103,5 +124,5 @@ private:
 	FVector AccumulatedForce{0};
 	FVector Acceleration{0};
 	FVector Velocity{0};
-	FGoKartMove	LastMove;
+	FGoKartMove LastMove;
 };

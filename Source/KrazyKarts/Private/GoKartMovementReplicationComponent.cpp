@@ -47,6 +47,12 @@ void UGoKartMovementReplicationComponent::TickComponent(float DeltaTime, ELevelT
 		return;
 	};
 
+	if (MeshOffsetRoot == nullptr)
+	{
+		UE_LOG(LogKrazyKarts, Error, TEXT("[%s] No mesh offset component at line %i"), ANSI_TO_TCHAR(__FUNCTION__), __LINE__);
+		return;
+	};
+
 	if (Pawn->IsLocallyControlled())
 	{
 		const FGoKartMove LastMove = MovementComponent->GetLastMove();
@@ -150,8 +156,8 @@ void UGoKartMovementReplicationComponent::SimulatedProxyTick(const float DeltaTi
 	const FQuat NewRotation = FQuat::Slerp(StartRotation, TargetRotation, LerpRatio);
 
 	// Apply side effects
-	GetOwner()->SetActorLocation(NewLocation);
-	GetOwner()->SetActorRotation(FRotator{NewRotation});
+	MeshOffsetRoot->SetWorldLocation(NewLocation);
+	MeshOffsetRoot->SetWorldRotation(FRotator{NewRotation});
 	MovementComponent->SetVelocity(NewVelocity);
 }
 
@@ -160,19 +166,14 @@ void UGoKartMovementReplicationComponent::SimulatedProxyTick(const float DeltaTi
 
 bool UGoKartMovementReplicationComponent::ServerSendMove_Validate(const FGoKartMove& Move)
 {
-	if (Move.Throttle < -1.0f || Move.Throttle > 1.0f)
+	if (const float ProposedTime = ClientSimulatedTime + Move.DeltaTime;
+		ProposedTime > GetWorld()->GetTimeSeconds())
 	{
-		UE_LOG(LogKrazyKarts, Error, TEXT("Invalid Move.CurrentThrottle == %f"), Move.Throttle)
+		UE_LOG(LogKrazyKarts, Error, TEXT("Invalid simulated time on client == %f"), ProposedTime)
 		return false;
 	}
 	
-	if (Move.SteeringThrow < -1.0f || Move.SteeringThrow > 1.0f)
-	{
-		UE_LOG(LogKrazyKarts, Error, TEXT("Invalid Move.SteeringThrow == %f"), Move.SteeringThrow)
-		return false;
-	}
-	
-	return true;
+	return Move.IsValid();
 }
 
 void UGoKartMovementReplicationComponent::ServerSendMove_Implementation(const FGoKartMove& Move)
@@ -182,6 +183,8 @@ void UGoKartMovementReplicationComponent::ServerSendMove_Implementation(const FG
 		UE_LOG(LogKrazyKarts, Warning, TEXT("[%s] No movement component at line %i"), ANSI_TO_TCHAR(__FUNCTION__), __LINE__);
 		return;
 	};
+
+	ClientSimulatedTime += Move.DeltaTime;
 	
 	// NOTE: Doing here and not on Tick because otherwise the server would be simulating
 	// with the last received input and would cause the client to move back to the last "speculative"
@@ -233,10 +236,19 @@ void UGoKartMovementReplicationComponent::OnReplicatedServerStateForAutonomousPr
 
 void UGoKartMovementReplicationComponent::OnReplicatedServerStateForSimulatedProxy()
 {
+	if (MeshOffsetRoot == nullptr)
+	{
+		UE_LOG(LogKrazyKarts, Error, TEXT("[%s] No mesh offset component at line %i"), ANSI_TO_TCHAR(__FUNCTION__), __LINE__);
+		return;
+	};
+	
 	ClientTimeBetweenLastReplication = ClientTimeSinceLastReplication;
 	ClientTimeSinceLastReplication = 0;
-	StartTransformForSimulatedProxy = GetOwner()->GetTransform();
+	StartTransformForSimulatedProxy.SetLocation(MeshOffsetRoot->GetComponentLocation());
+	StartTransformForSimulatedProxy.SetRotation(MeshOffsetRoot->GetComponentQuat());
 	StartVelocityForSimulatedProxy = MovementComponent->GetVelocity();
+
+	GetOwner()->SetActorTransform(ServerState.Transform);
 }
 
 
