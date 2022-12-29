@@ -28,6 +28,7 @@ AGoKartPawn::AGoKartPawn()
  	// Set this pawn to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 	bReplicates = true;
+	SetReplicatingMovement(false);
 
 	// Create components
 	MovementComponent = CreateDefaultSubobject<UGoKartMovementComponent>(TEXT("Go Kart Movement Component"));
@@ -39,6 +40,7 @@ AGoKartPawn::AGoKartPawn()
 void AGoKartPawn::BeginPlay()
 {
 	Super::BeginPlay();
+
 }
 
 // Called every frame

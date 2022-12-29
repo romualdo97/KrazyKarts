@@ -72,8 +72,11 @@ void UGoKartMovementReplicationComponent::TickComponent(float DeltaTime, ELevelT
 	}
 	else if (Pawn->GetLocalRole() == ROLE_SimulatedProxy)
 	{
+		// Interpolate based on last two received server states
+		SimulatedProxyTick(DeltaTime);
+		
 		// Use the replicated server state to simulate some other client locally on this client
-		MovementComponent->SimulateMoveTick(ServerState.LastMove);
+		// MovementComponent->SimulateMoveTick(ServerState.LastMove);
 	}
 }
 
@@ -97,6 +100,59 @@ void UGoKartMovementReplicationComponent::UpdateServerState(const FGoKartMove& M
 	ServerState.LastMove = Move;
 	ServerState.Transform = GetOwner()->GetActorTransform();
 	ServerState.Velocity = MovementComponent->GetVelocity();
+}
+
+void UGoKartMovementReplicationComponent::SimulatedProxyTick(const float DeltaTime)
+{
+	ClientTimeSinceLastReplication += DeltaTime;
+	
+	// If first frame then skip
+	if (ClientTimeBetweenLastReplication < KINDA_SMALL_NUMBER)
+	{
+		return;
+	}
+
+	const float LerpRatio = ClientTimeSinceLastReplication / ClientTimeBetweenLastReplication;
+	
+	const FVector StartLocation = StartTransformForSimulatedProxy.GetLocation();
+	const FVector TargetLocation = ServerState.Transform.GetLocation();
+	FVector NewLocation;
+	FVector NewVelocity;
+
+	if (bSimulatedProxyUsesCubicInterpolation)
+	{
+		// NOTE: This is required because we need the derivative in terms of Alpha
+		// (1) Slope = Derivative = DeltaLocation / DeltaAlpha
+		// (2) Velocity = DeltaLocation / DeltaTime
+		// (3) DeltaAlpha = DeltaTime / ClientTimeBetweenLastReplication
+		// Put (3) in (1)
+		// (4) Derivative = DeltaLocation / (DeltaTime / ClientTimeBetweenLastReplication)
+		// (5) Derivative = Velocity * ClientTimeBetweenLastReplication
+
+		// Calculate a point over the cubic function
+		const float VelocityToDerivative = ClientTimeBetweenLastReplication * 100; // Multiply by 100 to convert velocity at next line from m/s to cm/s
+		const FVector StartDerivative = StartVelocityForSimulatedProxy * VelocityToDerivative;
+		const FVector TargetDerivative = ServerState.Velocity * VelocityToDerivative; 
+		NewLocation = FMath::CubicInterp(StartLocation, StartDerivative, TargetLocation, TargetDerivative, LerpRatio);
+
+		// Calculate the first derivative of point over the cubic curve
+		NewVelocity = FMath::CubicInterpDerivative(StartLocation, StartDerivative, TargetLocation, TargetDerivative, LerpRatio);
+		NewVelocity /= VelocityToDerivative; // Resolve velocity at (5)
+	}
+	else
+	{
+		NewLocation = FMath::LerpStable(StartLocation, TargetLocation, LerpRatio);
+		NewVelocity = MovementComponent	->GetVelocity(); // Just does nothing
+	}
+
+	const FQuat StartRotation = StartTransformForSimulatedProxy.GetRotation();
+	const FQuat TargetRotation = ServerState.Transform.GetRotation();
+	const FQuat NewRotation = FQuat::Slerp(StartRotation, TargetRotation, LerpRatio);
+
+	// Apply side effects
+	GetOwner()->SetActorLocation(NewLocation);
+	GetOwner()->SetActorRotation(FRotator{NewRotation});
+	MovementComponent->SetVelocity(NewVelocity);
 }
 
 // ===================================================
@@ -148,6 +204,19 @@ void UGoKartMovementReplicationComponent::OnReplicatedServerState()
 		return;
 	};
 
+	// Handle replication on distinct clients
+	if (GetOwnerRole() == ROLE_AutonomousProxy)
+	{
+		OnReplicatedServerStateForAutonomousProxy();
+	}
+	else if (GetOwnerRole() == ROLE_SimulatedProxy)
+	{
+		OnReplicatedServerStateForSimulatedProxy();		
+	}
+}
+
+void UGoKartMovementReplicationComponent::OnReplicatedServerStateForAutonomousProxy()
+{
 	// Called only on clients
 	GetOwner()->SetActorTransform(ServerState.Transform);
 	MovementComponent->SetVelocity(ServerState.Velocity);
@@ -160,6 +229,14 @@ void UGoKartMovementReplicationComponent::OnReplicatedServerState()
 	{
 		MovementComponent->SimulateMoveTick(Move);
 	}
+}
+
+void UGoKartMovementReplicationComponent::OnReplicatedServerStateForSimulatedProxy()
+{
+	ClientTimeBetweenLastReplication = ClientTimeSinceLastReplication;
+	ClientTimeSinceLastReplication = 0;
+	StartTransformForSimulatedProxy = GetOwner()->GetTransform();
+	StartVelocityForSimulatedProxy = MovementComponent->GetVelocity();
 }
 
 
